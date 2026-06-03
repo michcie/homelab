@@ -1,0 +1,24 @@
+# --- k3s ---
+k3s_version: ""          # puste = latest; np. "v1.30.2+k3s1"
+k3s_config_dir: /etc/rancher/k3s
+k3s_data_dir: /var/lib/rancher/k3s
+
+# --- Flux ---
+flux_version: "2.3.0"
+flux_github_owner: "michcie"    # twój GitHub user/org
+flux_github_repo: "homelab"
+flux_github_path: "clusters/homelab"
+# flux_github_token pobierany z env: GITHUB_TOKEN (nie wpisuj tu!)
+
+# --- SOPS / age ---
+sops_version: "3.9.0"
+age_key_path: "/home/{{ ansible_user }}/.config/sops/age/keys.txt"
+
+# --- Docker ---
+docker_compose_dir: /opt/compose
+docker_users:
+  - "{{ ansible_user }}"
+
+# --- Base ---
+hostname: homelab
+ssh_authorized_keys: []  # opcjonalnie: lista kluczy do dodania

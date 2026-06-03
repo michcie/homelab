@@ -1,0 +1,54 @@
+---
+- name: Install flux CLI on server
+  get_url:
+    url: "https://github.com/fluxcd/flux2/releases/download/v{{ flux_version }}/flux_{{ flux_version }}_linux_amd64.tar.gz"
+    dest: /tmp/flux.tar.gz
+    mode: "0644"
+
+- name: Extract flux CLI on server
+  unarchive:
+    src: /tmp/flux.tar.gz
+    dest: /usr/local/bin/
+    remote_src: true
+    include:
+      - flux
+
+- name: Make flux executable
+  file:
+    path: /usr/local/bin/flux
+    mode: "0755"
+
+- name: Check if Flux is already bootstrapped
+  delegate_to: localhost
+  become: false
+  environment:
+    KUBECONFIG: "~/.kube/homelab.yaml"
+  command: kubectl get namespace flux-system
+  register: flux_ns
+  failed_when: false
+  changed_when: false
+
+- name: Bootstrap Flux (GitHub)
+  delegate_to: localhost
+  become: false
+  environment:
+    GITHUB_TOKEN: "{{ lookup('env', 'GITHUB_TOKEN') }}"
+    KUBECONFIG: "~/.kube/homelab.yaml"
+  command: >
+    flux bootstrap github
+    --owner={{ flux_github_owner }}
+    --repository={{ flux_github_repo }}
+    --path={{ flux_github_path }}
+    --personal
+    --private=false
+  when:
+    - flux_ns.rc != 0
+    - flux_github_owner != ""
+    - lookup('env', 'GITHUB_TOKEN') != ""
+
+- name: Flux bootstrap skipped (missing config)
+  debug:
+    msg: >-
+      Flux bootstrap pominięty.
+      Ustaw flux_github_owner w group_vars i uruchom z GITHUB_TOKEN=<token>.
+  when: flux_ns.rc != 0 and (flux_github_owner == "" or lookup('env', 'GITHUB_TOKEN') == "")

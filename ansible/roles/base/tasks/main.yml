@@ -1,0 +1,109 @@
+---
+- name: Set hostname
+  hostname:
+    name: "{{ hostname }}"
+
+- name: Upgrade packages
+  apt:
+    update_cache: true
+    upgrade: dist
+    cache_valid_time: 3600
+
+- name: Install base packages
+  apt:
+    name:
+      - curl
+      - wget
+      - git
+      - unzip
+      - jq
+      - open-iscsi
+      - nfs-common
+      - age
+      - ufw
+    state: present
+
+- name: Enable open-iscsi (wymagane przez Longhorn/local-path)
+  service:
+    name: open-iscsi
+    enabled: true
+    state: started
+
+- name: Load br_netfilter module
+  modprobe:
+    name: br_netfilter
+    state: present
+
+- name: Persist br_netfilter on boot
+  copy:
+    dest: /etc/modules-load.d/br_netfilter.conf
+    content: "br_netfilter\n"
+    mode: "0644"
+
+- name: Configure sysctl for k3s
+  sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    sysctl_file: /etc/sysctl.d/99-k3s.conf
+    reload: true
+  loop:
+    - { key: net.ipv4.ip_forward, value: "1" }
+    - { key: net.bridge.bridge-nf-call-iptables, value: "1" }
+    - { key: net.bridge.bridge-nf-call-ip6tables, value: "1" }
+
+- name: UFW — reset to defaults
+  ufw:
+    state: reset
+
+- name: UFW — deny incoming by default
+  ufw:
+    default: deny
+    direction: incoming
+
+- name: UFW — allow outgoing by default
+  ufw:
+    default: allow
+    direction: outgoing
+
+- name: UFW — allow SSH
+  ufw:
+    rule: allow
+    port: "22"
+    proto: tcp
+
+- name: UFW — allow k3s API
+  ufw:
+    rule: allow
+    port: "6443"
+    proto: tcp
+
+- name: UFW — allow HTTP/HTTPS (ingress)
+  ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop:
+    - "80"
+    - "443"
+
+- name: UFW — enable
+  ufw:
+    state: enabled
+
+- name: SSH hardening
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+    validate: sshd -t -f %s
+  loop:
+    - { regexp: '^#?PasswordAuthentication', line: 'PasswordAuthentication no' }
+    - { regexp: '^#?PermitRootLogin', line: 'PermitRootLogin no' }
+  notify: restart sshd
+
+- name: Add authorized SSH keys
+  authorized_key:
+    user: "{{ ansible_user }}"
+    key: "{{ item }}"
+  loop: "{{ ssh_authorized_keys }}"
+  when: ssh_authorized_keys | length > 0

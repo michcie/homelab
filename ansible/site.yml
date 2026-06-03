@@ -1,0 +1,24 @@
+---
+- name: Homelab provisioning
+  hosts: all
+  become: true
+  tasks:
+    - import_role:
+        name: base
+      tags: [base]
+
+    - import_role:
+        name: docker
+      tags: [docker]
+
+    - import_role:
+        name: k3s
+      tags: [k3s]
+
+    - import_role:
+        name: sops
+      tags: [sops]
+
+    - import_role:
+        name: flux
+      tags: [flux]

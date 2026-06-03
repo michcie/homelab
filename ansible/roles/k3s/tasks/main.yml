@@ -1,0 +1,53 @@
+---
+- name: Check if k3s is already installed
+  stat:
+    path: /usr/local/bin/k3s
+  register: k3s_binary
+
+- name: Install k3s
+  environment:
+    INSTALL_K3S_VERSION: "{{ k3s_version | default('') }}"
+  shell: |
+    curl -sfL https://get.k3s.io | sh -s - server \
+      --cluster-init \
+      --disable=traefik \
+      --write-kubeconfig-mode=644
+  args:
+    creates: /usr/local/bin/k3s
+
+- name: Wait for k3s to be ready
+  command: kubectl get nodes
+  register: nodes_ready
+  until: nodes_ready.rc == 0 and 'Ready' in nodes_ready.stdout
+  retries: 20
+  delay: 10
+  changed_when: false
+
+- name: Ensure .kube directory exists for ansible_user
+  file:
+    path: "/home/{{ ansible_user }}/.kube"
+    state: directory
+    owner: "{{ ansible_user }}"
+    mode: "0700"
+
+- name: Copy kubeconfig for ansible_user
+  copy:
+    src: /etc/rancher/k3s/k3s.yaml
+    dest: "/home/{{ ansible_user }}/.kube/config"
+    remote_src: true
+    owner: "{{ ansible_user }}"
+    mode: "0600"
+
+- name: Fetch kubeconfig locally
+  fetch:
+    src: /etc/rancher/k3s/k3s.yaml
+    dest: "~/.kube/homelab.yaml"
+    flat: true
+
+- name: Fix kubeconfig server address
+  delegate_to: localhost
+  become: false
+  replace:
+    path: "~/.kube/homelab.yaml"
+    regexp: 'https://127\.0\.0\.1:6443'
+    replace: "https://{{ ansible_host }}:6443"

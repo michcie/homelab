@@ -1,0 +1,35 @@
+---
+- name: Install sops binary
+  get_url:
+    url: "https://github.com/getsops/sops/releases/download/v{{ sops_version }}/sops-v{{ sops_version }}.linux.amd64"
+    dest: /usr/local/bin/sops
+    mode: "0755"
+    checksum: "sha256:https://github.com/getsops/sops/releases/download/v{{ sops_version }}/sops-v{{ sops_version }}.checksums.txt"
+
+- name: Ensure age key directory exists
+  file:
+    path: "{{ age_key_path | dirname }}"
+    state: directory
+    owner: "{{ ansible_user }}"
+    mode: "0700"
+  become_user: "{{ ansible_user }}"
+
+- name: Check if age key already exists
+  stat:
+    path: "{{ age_key_path }}"
+  register: age_key_stat
+
+- name: Generate age key (only if not present)
+  command: age-keygen -o "{{ age_key_path }}"
+  become_user: "{{ ansible_user }}"
+  when: not age_key_stat.stat.exists
+
+- name: Read age public key
+  command: age-keygen -y "{{ age_key_path }}"
+  register: age_pubkey
+  changed_when: false
+  become_user: "{{ ansible_user }}"
+
+- name: Show age public key (dodaj do .sops.yaml w repo)
+  debug:
+    msg: "age public key: {{ age_pubkey.stdout }}"

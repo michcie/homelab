@@ -1,0 +1,6 @@
+all:
+  hosts:
+    hetzner-cp:
+      ansible_host: 167.233.35.96
+      ansible_user: root
+      ansible_ssh_private_key_file: ~/.ssh/id_rsa

@@ -1,0 +1,13 @@
+# Skopiuj ten plik jako terraform.tfvars i uzupełnij wartości
+# cp terraform.tfvars.example terraform.tfvars
+
+hcloud_token  = "TWÓJ_TOKEN_HETZNER"
+ssh_key_name  = "nazwa-klucza-w-hetzner"   # Security → SSH Keys
+
+# Opcje:
+# location          = "nbg1"     # nbg1 (Nuremberg), hel1 (Helsinki), fsn1 (Falkenstein)
+# server_type       = "cx22"     # cx22 (2vCPU/4GB), cx32 (4vCPU/8GB), cx42 (8vCPU/16GB)
+# worker_count      = 0          # 0 = single-node, 1+ = z workerami
+# worker_server_type = "cx22"
+# k3s_version       = ""         # np. "v1.30.2+k3s1" – puste = latest
+# cluster_name      = "k3s-test"
