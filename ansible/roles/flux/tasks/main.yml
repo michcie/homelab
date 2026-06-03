@@ -22,7 +22,7 @@
   delegate_to: localhost
   become: false
   environment:
-    KUBECONFIG: "~/.kube/homelab.yaml"
+    KUBECONFIG: "{{ lookup('env', 'HOME') }}/.kube/homelab.yaml"
   command: kubectl get namespace flux-system
   register: flux_ns
   failed_when: false
@@ -33,11 +33,12 @@
   become: false
   environment:
     GITHUB_TOKEN: "{{ lookup('env', 'GITHUB_TOKEN') }}"
-    KUBECONFIG: "~/.kube/homelab.yaml"
+    KUBECONFIG: "{{ lookup('env', 'HOME') }}/.kube/homelab.yaml"
   command: >
     flux bootstrap github
     --owner={{ flux_github_owner }}
     --repository={{ flux_github_repo }}
+    --branch={{ flux_github_branch | default('master') }}
     --path={{ flux_github_path }}
     --personal
     --private=false

@@ -1,4 +1,16 @@
 ---
+- name: Create k3s config (tls-san, flags)
+  copy:
+    dest: /etc/rancher/k3s/config.yaml
+    content: |
+      tls-san:
+        - "{{ ansible_host }}"
+      disable:
+        - traefik
+      write-kubeconfig-mode: "644"
+      cluster-init: true
+    mode: "0644"
+
 - name: Check if k3s is already installed
   stat:
     path: /usr/local/bin/k3s
@@ -7,11 +19,7 @@
 - name: Install k3s
   environment:
     INSTALL_K3S_VERSION: "{{ k3s_version | default('') }}"
-  shell: |
-    curl -sfL https://get.k3s.io | sh -s - server \
-      --cluster-init \
-      --disable=traefik \
-      --write-kubeconfig-mode=644
+  shell: curl -sfL https://get.k3s.io | sh -
   args:
     creates: /usr/local/bin/k3s
 
@@ -41,13 +49,13 @@
 - name: Fetch kubeconfig locally
   fetch:
     src: /etc/rancher/k3s/k3s.yaml
-    dest: "~/.kube/homelab.yaml"
+    dest: "{{ lookup('env', 'HOME') }}/.kube/homelab.yaml"
     flat: true
 
 - name: Fix kubeconfig server address
   delegate_to: localhost
   become: false
   replace:
-    path: "~/.kube/homelab.yaml"
+    path: "{{ lookup('env', 'HOME') }}/.kube/homelab.yaml"
     regexp: 'https://127\.0\.0\.1:6443'
     replace: "https://{{ ansible_host }}:6443"

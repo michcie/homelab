@@ -16,6 +16,17 @@ write_files:
       net.ipv4.ip_forward = 1
       net.bridge.bridge-nf-call-iptables = 1
       net.bridge.bridge-nf-call-ip6tables = 1
+  - path: /usr/local/bin/setup-kubeconfig.sh
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+      until kubectl get nodes 2>/dev/null; do sleep 3; done
+      PUBLIC_IP=$(curl -s http://169.254.169.254/hetzner/v1/metadata/public-ipv4)
+      mkdir -p /root/.kube
+      cp /etc/rancher/k3s/k3s.yaml /root/.kube/config
+      sed -i "s/127.0.0.1/$PUBLIC_IP/g" /root/.kube/config
+      chmod 600 /root/.kube/config
   - path: /usr/local/bin/install-k3s.sh
     permissions: "0755"
     content: |
@@ -50,11 +61,5 @@ runcmd:
   - systemctl enable --now open-iscsi
   - /usr/local/bin/install-k3s.sh
   %{ if role == "server" ~}
-  - |
-    until kubectl get nodes 2>/dev/null; do sleep 3; done
-    PUBLIC_IP=$(curl -s http://169.254.169.254/hetzner/v1/metadata/public-ipv4)
-    mkdir -p /root/.kube
-    cp /etc/rancher/k3s/k3s.yaml /root/.kube/config
-    sed -i "s/127.0.0.1/$PUBLIC_IP/g" /root/.kube/config
-    chmod 600 /root/.kube/config
+  - /usr/local/bin/setup-kubeconfig.sh
   %{ endif ~}
