@@ -86,15 +86,32 @@ homelab-k3s/
 - [x] Ansible playbook gotowy (`ansible/`) — role: base, docker, k3s, sops, flux
 - [x] Założyć repo `homelab` na GitHubie (`michcie/homelab`), uzupełnić `flux_github_owner` w `group_vars/all.yml`
 - [x] Uruchomić Ansible na docelowym hoście (k3s v1.35.5+k3s1 na `homelab` node)
-- [x] `flux bootstrap github` — Flux działa, zweryfikowany przez `apps/whoami/` (pod Running)
-- [ ] **Następny krok:** Traefik przez Flux (`infrastructure/traefik/` — HelmRepository + HelmRelease)
-- [ ] Zbudować resztę struktury repo Flux (infrastructure: cert-manager, storage)
+- [x] `flux bootstrap github` — Flux działa, branch `master`, path `clusters/homelab`
+- [x] Struktura repo Flux: `clusters/homelab/`, `infrastructure/`, `apps/`
+- [x] Traefik przez Flux (`infrastructure/traefik/` — HelmRepository + HelmRelease v33.x)
+- [x] `apps/whoami/` — test deploymentu, Ingress na `whoami.homelab.local`
+- [ ] Zweryfikować że Traefik dostał IP i whoami odpowiada przez Ingress
+- [ ] cert-manager (`infrastructure/cert-manager/`)
 - [ ] Migracja istniejących apek z Portainera do gita
 - [ ] Backupy danych (PV) — Velero/restic — zanim zaczniemy polegać na klastrze
 
+### Struktura repo
+```
+homelab/
+├── clusters/homelab/          # punkt wejścia Fluxa
+│   ├── flux-system/           # auto-generowane przez flux bootstrap
+│   ├── infrastructure.yaml    # Flux Kustomization → ./infrastructure
+│   └── apps.yaml              # Flux Kustomization → ./apps (depends: infrastructure)
+├── infrastructure/
+│   └── traefik/               # HelmRepository + HelmRelease
+└── apps/
+    └── whoami/                # test: Deployment + Service + Ingress
+```
+
 ### Uwagi z konfiguracji
-- k3s zainstalowany z `--disable=traefik` — Traefik **nie** jest wbudowany, musi iść przez Flux/Helm
-- Ingress w `apps/whoami/whoami.yaml` używa `ingressClassName: traefik` — nie zadziała dopóki nie ma `infrastructure/traefik/`
+- k3s instalowany przez Ansible role z `/etc/rancher/k3s/config.yaml` (tls-san, disable traefik)
+- Traefik jako HelmRelease, service type LoadBalancer (klipper-lb k3s)
+- Ingress używa `ingressClassName: traefik`, host `whoami.homelab.local`
 
 ## Ansible — jak uruchomić
 
