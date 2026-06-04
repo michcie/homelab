@@ -98,7 +98,7 @@
     validate: sshd -t -f %s
   loop:
     - { regexp: '^#?PasswordAuthentication', line: 'PasswordAuthentication no' }
-    - { regexp: '^#?PermitRootLogin', line: 'PermitRootLogin no' }
+    - { regexp: '^#?PermitRootLogin', line: 'PermitRootLogin prohibit-password' }
   notify: restart sshd
 
 - name: Add authorized SSH keys

@@ -91,6 +91,8 @@ homelab-k3s/
 - [x] Traefik działa, whoami odpowiada przez Ingress
 - [x] cert-manager (`infrastructure/cert-manager/`) — Cloudflare DNS-01, staging + prod ClusterIssuer
 - [x] SOPS + age — sekrety szyfrowane w repo, Flux odszyfrowuje przez `sops-age` Secret
+- [x] Provisioning Hetzner utwardzony — prywatny NIC w cloud-init, `PermitRootLogin prohibit-password`, `IdentitiesOnly` w Ansible (patrz: Troubleshooting)
+- [ ] Wyjąć `hcloud_token` z `terraform.tfvars` do env (`TF_VAR_hcloud_token`/`HCLOUD_TOKEN`) — teraz wisi jawnie
 - [ ] Zaszyfrować `cloudflare-secret.yaml` przez SOPS i pushować
 - [ ] Migracja istniejących apek z Portainera do gita
 - [ ] Backupy danych (PV) — Velero/restic — zanim zaczniemy polegać na klastrze
@@ -98,17 +100,18 @@ homelab-k3s/
 ### Struktura repo
 ```
 homelab/
-├── clusters/homelab/          # punkt wejścia Fluxa
-│   ├── flux-system/           # auto-generowane przez flux bootstrap
-│   ├── infrastructure.yaml    # Flux Kustomization → ./infrastructure (decryption: sops)
-│   └── apps.yaml              # Flux Kustomization → ./apps (dependsOn: infrastructure)
+├── clusters/homelab/              # punkt wejścia Fluxa
+│   ├── flux-system/               # auto-generowane przez flux bootstrap
+│   ├── infrastructure.yaml        # Kustomization → ./infrastructure/controllers (decryption: sops)
+│   ├── infrastructure-configs.yaml# Kustomization → ./infrastructure/configs (dependsOn: controllers)
+│   └── apps.yaml                  # Kustomization → ./apps (dependsOn: configs)
 ├── infrastructure/
-│   ├── traefik/               # HelmRepository + HelmRelease
-│   └── cert-manager/          # HelmRelease + ClusterIssuers (Cloudflare DNS-01) + Secret
+│   ├── controllers/               # Traefik + cert-manager (HelmRepository + HelmRelease + namespace)
+│   └── configs/                   # cert-manager ClusterIssuers + cloudflare-secret (SOPS)
 ├── apps/
-│   └── whoami/                # test: Deployment + Service + Ingress
-├── hetzner-terraform/         # Terraform — serwer testowy na Hetznerze
-└── ansible/                   # provisioning: base, docker, k3s, flux, sops
+│   └── whoami/                    # test: Deployment + Service + Ingress
+├── hetzner-terraform/             # Terraform — serwer testowy na Hetznerze (+ cloud-init)
+└── ansible/                       # provisioning: base, docker, k3s, flux, sops
     ├── secrets.yml            # lokalny plik z sekretami (gitignore!)
     ├── group_vars/all.yml
     ├── inventory.yml          # gitignore — generowany przez Terraform
@@ -119,10 +122,22 @@ homelab/
 ```
 
 ### Uwagi z konfiguracji
-- k3s config: `tls-san` z publicznym IP, `disable: traefik`; Ansible auto-naprawia cert jeśli brak SAN
-- Traefik: HelmRelease, service type LoadBalancer (klipper-lb k3s)
-- SOPS: klucz prywatny age w `ansible/secrets.yml` (lokalnie) + jako Secret `sops-age` w klastrze
-- Flux decryption skonfigurowany w `clusters/homelab/infrastructure.yaml` i `apps.yaml`
+- **Sieć:** k3s gada wewnętrznie po sieci **prywatnej** Hetznera (`--node-ip` / `--advertise-address` = `10.0.1.10`), a API/kubeconfig wystawione jest na **publicznym** IP. Hetzner dokłada prywatny NIC tylko na warstwie SDN — `cloud-init` (`setup-private-net.sh`) sam wykrywa interfejs (nazwa zależy od typu serwera) i podnosi go przez DHCP **przed** startem k3s, inaczej etcd nie zbinduje się do `10.0.1.10`.
+- **k3s config:** `tls-san` z publicznym IP, `disable: traefik`; Ansible auto-naprawia cert jeśli brak publicznego IP w SAN.
+- **Dwa instalatory k3s:** `cloud-init` (terraform, pierwszy boot) i rola `k3s` (Ansible). Configi są zgodne, ale to potencjalne źródło driftu — docelowo jedno źródło prawdy.
+- **SSH:** łączymy się jako `root`, więc hardening używa `PermitRootLogin prohibit-password` (NIE `no` — `no` zablokuje też logowanie kluczem i zamknie dostęp). `ansible.cfg` ma `IdentitiesOnly=yes`, żeby `ssh-agent` nie podsuwał obcych kluczy i nie wyczerpywał `MaxAuthTries`.
+- **Traefik:** HelmRelease, service type LoadBalancer (klipper-lb k3s).
+- **SOPS:** klucz prywatny age w `ansible/secrets.yml` (lokalnie) + jako Secret `sops-age` w klastrze (klucz w secretcie musi kończyć się na `.agekey` — Flux tego szuka).
+- **Flux decryption:** skonfigurowany w `clusters/homelab/infrastructure.yaml`, `infrastructure-configs.yaml` i `apps.yaml`. Bez Secreta `sops-age` Kustomizacje z `decryption.sops` lecą `Ready=False` i blokują kaskadę (`controllers → configs → apps`).
+
+### Troubleshooting / rozwiązane wpadki
+Wpadki z bootstrapu, które warto pamiętać (wszystkie naprawione w kodzie):
+
+- **k3s crash-loop: `bind: cannot assign requested address` (10.0.1.10:2380).** etcd nie mógł zbindować się do prywatnego IP, bo Hetzner nie konfiguruje prywatnego NIC w systemie — był tylko w SDN. Fix: `setup-private-net.sh` w cloud-init podnosi NIC (DHCP) przed k3s. Objaw pochodny: brak `/etc/rancher/k3s/k3s.yaml` → task „Wait for k3s" w Ansible leci w nieskończoność.
+- **Po Ansible `Permission denied (publickey)` jako root.** Rola `base` ustawiała `PermitRootLogin no` i restartowała sshd → root zablokowany (łączymy się jako root). Fix: `prohibit-password`. Odzysk żywego serwera: konsola Hetznera (Reset root password) → popraw sshd_config. Na świeżym serwerze problem już nie wystąpi.
+- **`Permission denied` przez ssh-agent.** Agent podsuwał obce klucze i wyczerpywał `MaxAuthTries`, zanim ssh spróbował właściwego `id_rsa`. Fix: `IdentitiesOnly=yes` w `ansible.cfg`. Szybki test izolujący: `ssh -o IdentitiesOnly=yes -i ~/.ssh/id_rsa root@<IP>`.
+- **`REMOTE HOST IDENTIFICATION HAS CHANGED` po `tf-destroy`+`tf-apply`.** Nowy serwer = nowy host key na tym samym IP. Fix: `ssh-keygen -f ~/.ssh/known_hosts -R <IP>`.
+- **Traefik/whoami nie wstają, choć k3s żyje.** `flux get kustomizations` pokazywał `secrets "sops-age" not found` na `infrastructure-controllers` → kaskada zablokowana. Przyczyna: playbook wywalił się wcześniej na roli `k3s`, więc role `flux`/`sops` (kolejność w `site.yml`) nie doszły i klucz age nie trafił do klastra. Fix: dokończ `make ansible TAGS=flux,sops`.
 
 ## Ansible — jak uruchomić
 
