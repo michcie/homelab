@@ -24,6 +24,11 @@ spec:
     remediation:
       retries: 3
   values:
+    # cert-manager (chart v1.15+) instaluje CRD-y TYLKO przy tej fladze;
+    # spec.install.crds wyżej nie działa, bo chart nie trzyma CRD w katalogu crds/.
+    crds:
+      enabled: true
+      keep: true
     replicaCount: 1
     # startupapicheck to tylko sanity-check po instalacji; bywa flaky i timeoutuje
     # blokując cały release. cert-manager działa bez niego.
