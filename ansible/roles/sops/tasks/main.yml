@@ -27,6 +27,14 @@
     dest: "{{ age_tmp.path }}"
     mode: "0600"
 
+- name: Ensure flux-system namespace exists (sops leci przed flux bootstrap)
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  shell: |
+    kubectl create namespace flux-system \
+      --dry-run=client -o yaml | kubectl apply -f -
+  changed_when: false
+
 - name: Create sops-age Secret in flux-system namespace
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml

@@ -7,6 +7,10 @@ spec:
   interval: 1h
   path: ./infrastructure/controllers
   prune: true
+  # Czekaj aż HelmReleasy (cert-manager, Traefik) będą realnie Ready —
+  # inaczej infrastructure-configs rusza zanim CRD ClusterIssuer się zarejestruje.
+  wait: true
+  timeout: 5m
   sourceRef:
     kind: GitRepository
     name: flux-system

@@ -15,10 +15,12 @@
         name: k3s
       tags: [k3s]
 
-    - import_role:
-        name: flux
-      tags: [flux]
-
+    # sops PRZED flux: secret `sops-age` musi istnieć zanim `flux bootstrap`
+    # zacznie reconcile Kustomizacji z decryption.sops (inaczej lecą "sops-age not found").
     - import_role:
         name: sops
       tags: [sops]
+
+    - import_role:
+        name: flux
+      tags: [flux]
