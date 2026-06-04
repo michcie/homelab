@@ -6,30 +6,37 @@
     mode: "0755"
     checksum: "sha256:https://github.com/getsops/sops/releases/download/v{{ sops_version }}/sops-v{{ sops_version }}.checksums.txt"
 
-- name: Ensure age key directory exists
-  file:
-    path: "{{ age_key_path | dirname }}"
-    state: directory
-    owner: "{{ ansible_user }}"
-    mode: "0700"
-  become_user: "{{ ansible_user }}"
+- name: Install age
+  apt:
+    name: age
+    state: present
+    update_cache: false
 
-- name: Check if age key already exists
-  stat:
-    path: "{{ age_key_path }}"
-  register: age_key_stat
+- name: Load secrets.yml
+  include_vars:
+    file: "{{ playbook_dir }}/secrets.yml"
 
-- name: Generate age key (only if not present)
-  command: age-keygen -o "{{ age_key_path }}"
-  become_user: "{{ ansible_user }}"
-  when: not age_key_stat.stat.exists
+- name: Create temp file for age key on server
+  tempfile:
+    suffix: .agekey
+  register: age_tmp
 
-- name: Read age public key
-  command: age-keygen -y "{{ age_key_path }}"
-  register: age_pubkey
+- name: Write age key to temp file
+  copy:
+    content: "{{ age_private_key }}\n"
+    dest: "{{ age_tmp.path }}"
+    mode: "0600"
+
+- name: Create sops-age Secret in flux-system namespace
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  shell: |
+    kubectl -n flux-system create secret generic sops-age \
+      --from-file=age.agekey={{ age_tmp.path }} \
+      --dry-run=client -o yaml | kubectl apply -f -
   changed_when: false
-  become_user: "{{ ansible_user }}"
 
-- name: Show age public key (dodaj do .sops.yaml w repo)
-  debug:
-    msg: "age public key: {{ age_pubkey.stdout }}"
+- name: Remove temp age key file
+  file:
+    path: "{{ age_tmp.path }}"
+    state: absent

@@ -16,9 +16,9 @@
       tags: [k3s]
 
     - import_role:
-        name: sops
-      tags: [sops]
-
-    - import_role:
         name: flux
       tags: [flux]
+
+    - import_role:
+        name: sops
+      tags: [sops]

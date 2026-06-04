@@ -1,27 +1,31 @@
-TF      := terraform -chdir=hetzner-test
+TF      := terraform -chdir=hetzner-terraform
 ANSIBLE := ansible-playbook -i ansible/inventory.yml ansible/site.yml
 
-.PHONY: deploy tf-apply provision bootstrap-flux destroy
+.PHONY: tf-apply tf-destroy tf-output ansible deploy help
 
-# Stawia serwer i od razu provisionuje
-deploy: tf-apply provision
+##@ Terraform
 
-# Tylko terraform apply (generuje też ansible/inventory.yml)
-tf-apply:
+tf-apply: ## Postaw infrastrukturę na Hetznerze
 	$(TF) apply
 
-# Ansible — wszystkie role
-provision:
-	$(ANSIBLE)
-
-# Ansible — tylko wybrana rola, np: make run TAGS=k3s
-run:
-	$(ANSIBLE) --tags $(TAGS)
-
-# Flux bootstrap (wymaga GITHUB_TOKEN)
-bootstrap-flux:
-	GITHUB_TOKEN=$(GITHUB_TOKEN) $(ANSIBLE) --tags flux
-
-# Niszczy infrastrukturę na Hetznerze
-destroy:
+tf-destroy: ## Zniszcz infrastrukturę na Hetznerze
 	$(TF) destroy
+
+tf-output: ## Pokaż outputy terraforma (IP serwera itp.)
+	$(TF) output
+
+##@ Ansible
+
+ansible: ## Uruchom Ansible, opcjonalnie z tagami: make ansible TAGS=k3s,flux
+	$(ANSIBLE) $(if $(TAGS),--tags $(TAGS),)
+
+##@ Skróty
+
+deploy: tf-apply ansible ## Postaw infrastrukturę i sprovisionuj od zera
+
+##@ Info
+
+help: ## Pokaż tę pomoc
+	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+
+.DEFAULT_GOAL := help

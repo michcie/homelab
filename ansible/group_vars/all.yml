@@ -11,8 +11,8 @@ flux_github_path: "clusters/homelab"
 # flux_github_token pobierany z env: GITHUB_TOKEN (nie wpisuj tu!)
 
 # --- SOPS / age ---
-sops_version: "3.9.0"
-age_key_path: "/home/{{ ansible_user }}/.config/sops/age/keys.txt"
+sops_version: "3.13.1"
+# Klucz prywatny age czytany z ansible/.env: AGE_PRIVATE_KEY=AGE-SECRET-KEY-1...
 
 # --- Docker ---
 docker_compose_dir: /opt/compose

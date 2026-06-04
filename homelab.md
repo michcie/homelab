@@ -82,16 +82,16 @@ homelab-k3s/
 
 ## Co robimy (plan)
 - [x] **Decyzja:** B — k3s + Flux (hybryd: Compose akceptowalny dla prostych appliance'ów)
-- [ ] Domknąć Hetznera (serwery `off` na zdeprecjonowanym `cpx22`)
 - [x] Ansible playbook gotowy (`ansible/`) — role: base, docker, k3s, sops, flux
-- [x] Założyć repo `homelab` na GitHubie (`michcie/homelab`), uzupełnić `flux_github_owner` w `group_vars/all.yml`
-- [x] Uruchomić Ansible na docelowym hoście (k3s v1.35.5+k3s1 na `homelab` node)
+- [x] Założyć repo `homelab` na GitHubie (`michcie/homelab`)
 - [x] `flux bootstrap github` — Flux działa, branch `master`, path `clusters/homelab`
 - [x] Struktura repo Flux: `clusters/homelab/`, `infrastructure/`, `apps/`
-- [x] Traefik przez Flux (`infrastructure/traefik/` — HelmRepository + HelmRelease v33.x)
+- [x] Traefik przez Flux (`infrastructure/traefik/` — HelmRelease v33.x)
 - [x] `apps/whoami/` — test deploymentu, Ingress na `whoami.homelab.local`
-- [ ] Zweryfikować że Traefik dostał IP i whoami odpowiada przez Ingress
-- [ ] cert-manager (`infrastructure/cert-manager/`)
+- [x] Traefik działa, whoami odpowiada przez Ingress
+- [x] cert-manager (`infrastructure/cert-manager/`) — Cloudflare DNS-01, staging + prod ClusterIssuer
+- [x] SOPS + age — sekrety szyfrowane w repo, Flux odszyfrowuje przez `sops-age` Secret
+- [ ] Zaszyfrować `cloudflare-secret.yaml` przez SOPS i pushować
 - [ ] Migracja istniejących apek z Portainera do gita
 - [ ] Backupy danych (PV) — Velero/restic — zanim zaczniemy polegać na klastrze
 
@@ -100,35 +100,58 @@ homelab-k3s/
 homelab/
 ├── clusters/homelab/          # punkt wejścia Fluxa
 │   ├── flux-system/           # auto-generowane przez flux bootstrap
-│   ├── infrastructure.yaml    # Flux Kustomization → ./infrastructure
-│   └── apps.yaml              # Flux Kustomization → ./apps (depends: infrastructure)
+│   ├── infrastructure.yaml    # Flux Kustomization → ./infrastructure (decryption: sops)
+│   └── apps.yaml              # Flux Kustomization → ./apps (dependsOn: infrastructure)
 ├── infrastructure/
-│   └── traefik/               # HelmRepository + HelmRelease
-└── apps/
-    └── whoami/                # test: Deployment + Service + Ingress
+│   ├── traefik/               # HelmRepository + HelmRelease
+│   └── cert-manager/          # HelmRelease + ClusterIssuers (Cloudflare DNS-01) + Secret
+├── apps/
+│   └── whoami/                # test: Deployment + Service + Ingress
+├── hetzner-terraform/         # Terraform — serwer testowy na Hetznerze
+└── ansible/                   # provisioning: base, docker, k3s, flux, sops
+    ├── secrets.yml            # lokalny plik z sekretami (gitignore!)
+    ├── group_vars/all.yml
+    ├── inventory.yml          # gitignore — generowany przez Terraform
+    └── roles/
+        ├── k3s/               # instalacja k3s + auto-fix TLS SAN
+        ├── flux/              # flux bootstrap (GitHub)
+        └── sops/              # instalacja sops/age + wgranie klucza do klastra
 ```
 
 ### Uwagi z konfiguracji
-- k3s instalowany przez Ansible role z `/etc/rancher/k3s/config.yaml` (tls-san, disable traefik)
-- Traefik jako HelmRelease, service type LoadBalancer (klipper-lb k3s)
-- Ingress używa `ingressClassName: traefik`, host `whoami.homelab.local`
+- k3s config: `tls-san` z publicznym IP, `disable: traefik`; Ansible auto-naprawia cert jeśli brak SAN
+- Traefik: HelmRelease, service type LoadBalancer (klipper-lb k3s)
+- SOPS: klucz prywatny age w `ansible/secrets.yml` (lokalnie) + jako Secret `sops-age` w klastrze
+- Flux decryption skonfigurowany w `clusters/homelab/infrastructure.yaml` i `apps.yaml`
 
 ## Ansible — jak uruchomić
 
+### Wymagania (raz)
 ```bash
-# Instalacja zależności (raz)
 pip install ansible
 
-# Wszystkie role naraz
-ansible-playbook -i inventory.yml site.yml
+# Windows (PowerShell) — generuj klucz age:
+age-keygen -o "$env:APPDATA\sops\age\keys.txt"
+# Wypisze: Public key: age1abc... — wstaw do .sops.yaml w repo
+```
 
-# Tylko wybrane role (tagi)
-ansible-playbook -i inventory.yml site.yml --tags base
-ansible-playbook -i inventory.yml site.yml --tags k3s
-ansible-playbook -i inventory.yml site.yml --tags sops,flux
+### Plik z sekretami
+Utwórz `ansible/secrets.yml` (nie trafi do gita):
+```yaml
+github_token: "ghp_twój_token"
+age_private_key: "AGE-SECRET-KEY-1..."
+```
 
-# Flux bootstrap wymaga tokenu GitHub
-GITHUB_TOKEN=ghp_xxx ansible-playbook -i inventory.yml site.yml --tags flux
+### Komendy (z katalogu homelab/)
+```bash
+make                          # pokaż help
+
+make tf-apply                 # postaw serwer na Hetznerze
+make ansible                  # wszystkie role (base, docker, k3s, flux, sops)
+make ansible TAGS=k3s,flux    # tylko wybrane role
+make deploy                   # tf-apply + ansible (wszystko od zera)
+
+make tf-destroy               # zniszcz serwer
 ```
 
 Przed uruchomieniem uzupełnij w `group_vars/all.yml`:

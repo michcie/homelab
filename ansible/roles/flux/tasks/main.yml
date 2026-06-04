@@ -1,4 +1,8 @@
 ---
+- name: Load secrets.yml
+  include_vars:
+    file: "{{ playbook_dir }}/secrets.yml"
+
 - name: Install flux CLI on server
   get_url:
     url: "https://github.com/fluxcd/flux2/releases/download/v{{ flux_version }}/flux_{{ flux_version }}_linux_amd64.tar.gz"
@@ -32,7 +36,7 @@
   delegate_to: localhost
   become: false
   environment:
-    GITHUB_TOKEN: "{{ lookup('env', 'GITHUB_TOKEN') }}"
+    GITHUB_TOKEN: "{{ github_token }}"
     KUBECONFIG: "{{ lookup('env', 'HOME') }}/.kube/homelab.yaml"
   command: >
     flux bootstrap github
@@ -45,11 +49,11 @@
   when:
     - flux_ns.rc != 0
     - flux_github_owner != ""
-    - lookup('env', 'GITHUB_TOKEN') != ""
+    - github_token != ""
 
 - name: Flux bootstrap skipped (missing config)
   debug:
     msg: >-
       Flux bootstrap pominięty.
       Ustaw flux_github_owner w group_vars i uruchom z GITHUB_TOKEN=<token>.
-  when: flux_ns.rc != 0 and (flux_github_owner == "" or lookup('env', 'GITHUB_TOKEN') == "")
+  when: flux_ns.rc != 0 and (flux_github_owner == "" or github_token == "")

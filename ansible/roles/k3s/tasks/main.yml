@@ -1,4 +1,10 @@
 ---
+- name: Create k3s config dir
+  file:
+    path: /etc/rancher/k3s
+    state: directory
+    mode: "0755"
+
 - name: Create k3s config (tls-san, flags)
   copy:
     dest: /etc/rancher/k3s/config.yaml
@@ -30,6 +36,38 @@
   retries: 20
   delay: 10
   changed_when: false
+
+- name: Check if public IP is in API server cert
+  shell: |
+    openssl x509 -in /var/lib/rancher/k3s/server/tls/serving-kube-apiserver.crt \
+      -noout -text 2>/dev/null | grep -q "{{ ansible_host }}"
+  register: cert_has_ip
+  failed_when: false
+  changed_when: false
+
+- name: Delete API server cert (brak public IP w SAN)
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /var/lib/rancher/k3s/server/tls/serving-kube-apiserver.crt
+    - /var/lib/rancher/k3s/server/tls/serving-kube-apiserver.key
+  when: cert_has_ip.rc != 0
+
+- name: Restart k3s to regenerate cert with correct SANs
+  systemd:
+    name: k3s
+    state: restarted
+  when: cert_has_ip.rc != 0
+
+- name: Wait for k3s ready after cert regeneration
+  command: kubectl get nodes
+  register: nodes_ready2
+  until: nodes_ready2.rc == 0 and 'Ready' in nodes_ready2.stdout
+  retries: 20
+  delay: 10
+  changed_when: false
+  when: cert_has_ip.rc != 0
 
 - name: Ensure .kube directory exists for ansible_user
   file:
