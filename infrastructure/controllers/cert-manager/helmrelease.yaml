@@ -13,9 +13,19 @@ spec:
         kind: HelmRepository
         name: jetstack
         namespace: flux-system
+  # Dłuższy timeout + retry — instalacja na małym węźle bywa wolna (pull obrazów)
+  timeout: 10m
   install:
     crds: Create
+    remediation:
+      retries: 3
   upgrade:
     crds: CreateReplace
+    remediation:
+      retries: 3
   values:
     replicaCount: 1
+    # startupapicheck to tylko sanity-check po instalacji; bywa flaky i timeoutuje
+    # blokując cały release. cert-manager działa bez niego.
+    startupapicheck:
+      enabled: false
