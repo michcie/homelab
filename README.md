@@ -161,6 +161,13 @@ Wpadki z bootstrapu, które warto pamiętać (wszystkie naprawione w kodzie):
   istnienie namespace → zawsze `rc=0` → skip. Fix: guard sprawdza deployment
   `source-controller`. Jeśli trafisz na pusty `flux-system` (z poprzedniej
   nieudanej próby): `kubectl delete ns flux-system` i odpal ponownie.
+- **Grafana wstała, ale brak dashboardów Fluxa.** `monitoring-configs`
+  (configmapa z dashboardami) ma `dependsOn: monitoring-controllers`. Jeśli
+  złapie „dependency ... is not ready" zanim controllers się dopną, czeka aż do
+  następnego cyklu (`interval: 10m`) — Grafana stoi bez dashboardów. Sidecar
+  importuje je dopiero gdy configmapa `flux-grafana-dashboards` (label
+  `grafana_dashboard=1`) trafi do ns `monitoring`. Fix natychmiastowy:
+  `flux reconcile kustomization monitoring-configs --with-source`.
 
 ## Jak działa Flux (krok po kroku)
 
