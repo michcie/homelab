@@ -1,0 +1,70 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: kube-prometheus-stack
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: kube-prometheus-stack
+      version: "69.x"
+      sourceRef:
+        kind: HelmRepository
+        name: prometheus-community
+  # Duży chart + małe węzły → instalacja bywa wolna (pull obrazów, CRD).
+  timeout: 15m
+  install:
+    crds: Create
+    remediation:
+      retries: 3
+  upgrade:
+    crds: CreateReplace
+    remediation:
+      retries: 3
+  driftDetection:
+    mode: enabled
+    ignore:
+      # adnotacja dokładana przez operator po instalacji — nie liczymy jej jako drift
+      - paths: ["/metadata/annotations/prometheus-operator-validated"]
+        target:
+          kind: PrometheusRule
+  # Custom-resource metryki dla obiektów Fluxa (kube-state-metrics) — patrz
+  # kube-state-metrics-config.yaml. Hash configmapy wstrzykuje kustomizeconfig.yaml.
+  valuesFrom:
+    - kind: ConfigMap
+      name: flux-kube-state-metrics-config
+      valuesKey: kube-state-metrics-config.yaml
+  values:
+    # Alertmanager wyłączony — na single-node bez kanałów alertów zbędny narzut.
+    alertmanager:
+      enabled: false
+    prometheus:
+      prometheusSpec:
+        retention: 24h
+        resources:
+          requests:
+            cpu: 200m
+            memory: 400Mi
+        # Zbieraj WSZYSTKIE ServiceMonitor/PodMonitor/Rule w klastrze, nie tylko
+        # te z labelem release (domyślnie Prometheus ignoruje obce) — żeby łapać
+        # PodMonitor Fluxa i ServiceMonitor Loki bez kombinowania z labelami.
+        serviceMonitorSelectorNilUsesHelmValues: false
+        podMonitorSelectorNilUsesHelmValues: false
+        ruleSelectorNilUsesHelmValues: false
+        probeSelectorNilUsesHelmValues: false
+    grafana:
+      # TODO: przenieść hasło do SOPS-secret (grafana.admin.existingSecret) —
+      # patrz planning.md / CLAUDE.md. Na razie inline.
+      adminPassword: changeme
+      defaultDashboardsEnabled: true
+      ingress:
+        enabled: true
+        ingressClassName: traefik
+        annotations:
+          cert-manager.io/cluster-issuer: letsencrypt-prod
+        hosts:
+          - grafana.homelab.dekros97.pl
+        tls:
+          - secretName: grafana-tls
+            hosts:
+              - grafana.homelab.dekros97.pl

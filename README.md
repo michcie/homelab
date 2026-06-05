@@ -20,6 +20,7 @@ provisioning i testy lecą na **serwerze testowym Hetzner** (`hetzner-terraform/
 | GitOps         | FluxCD v2 (branch `master`, path `clusters/homelab`)     |
 | Ingress        | Traefik (HelmRelease, LoadBalancer / klipper-lb)         |
 | TLS            | cert-manager + Cloudflare DNS-01 (staging + prod Issuer) |
+| Monitoring     | kube-prometheus-stack (Prometheus+Grafana+KSM) + Loki+promtail |
 | Sekrety        | SOPS + age (Flux odszyfrowuje w klastrze)                |
 
 ## Struktura repo
@@ -34,6 +35,9 @@ homelab/
 ├── infrastructure/
 │   ├── controllers/               # Traefik + cert-manager (HelmRepository + HelmRelease + namespace)
 │   └── configs/                   # cert-manager ClusterIssuers + cloudflare-secret (SOPS)
+├── monitoring/
+│   ├── controllers/               # kube-prometheus-stack + loki (HelmReleases)
+│   └── configs/                   # PodMonitor Fluxa + dashboardy Grafany
 ├── apps/
 │   └── whoami/                    # test: Deployment + Service + Ingress
 ├── hetzner-terraform/             # Terraform — serwer testowy na Hetznerze (+ cloud-init)
@@ -47,8 +51,15 @@ homelab/
         └── flux/                  # flux bootstrap (GitHub)
 ```
 
-Kaskada Kustomizacji: **controllers → configs → apps** (`dependsOn`), żeby apki nie
-startowały zanim jest ingress i TLS.
+Kaskada Kustomizacji: **infrastructure-controllers → infrastructure-configs → apps**
+(`dependsOn`), żeby apki nie startowały zanim jest ingress i TLS. Monitoring jest
+osobną gałęzią: **monitoring-controllers** (`dependsOn: infrastructure-controllers`)
+**→ monitoring-configs**.
+
+Grafana wystawiona przez Traefik na `grafana.homelab.dekros97.pl` (cert
+Let's Encrypt przez cert-manager / Cloudflare DNS-01). Wymaga rekordu **A**
+`grafana.homelab.dekros97.pl → <public IP serwera>` w Cloudflare. Bez DNS:
+`kubectl -n monitoring port-forward svc/kube-prometheus-stack-grafana 3000:80`.
 
 ## Jak postawić
 

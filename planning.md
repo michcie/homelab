@@ -87,6 +87,9 @@ spokojnie odpalisz oba.
 - [x] SOPS + age — sekrety szyfrowane w repo, Flux odszyfrowuje przez `sops-age` Secret
 - [x] Provisioning Hetzner utwardzony — prywatny NIC w cloud-init, `PermitRootLogin prohibit-password`, `IdentitiesOnly` w Ansible (patrz: Troubleshooting w README)
 - [x] Flux guard naprawiony — rola `flux` sprawdza deployment `source-controller`, nie sam namespace (rola `sops` tworzy `flux-system` wcześniej, więc check na namespace zawsze skipował bootstrap)
+- [x] Monitoring (`monitoring/`) — kube-prometheus-stack (Prometheus+operator+KSM+Grafana) + Loki (SingleBinary/filesystem) + promtail; PodMonitor + KSM custom-metrics dla obiektów Fluxa; dashboardy Fluxa; Grafana Ingress na `grafana.homelab.dekros97.pl`
+- [ ] Dodać w Cloudflare rekord A `grafana.homelab.dekros97.pl → <public IP>` (DNS-01 robi tylko cert, nie routuje ruchu)
+- [ ] Przenieść hasło admina Grafany z inline do SOPS-secret (`grafana.admin.existingSecret`)
 - [ ] Wyjąć `hcloud_token` z `terraform.tfvars` do env (`TF_VAR_hcloud_token`/`HCLOUD_TOKEN`) — teraz wisi jawnie
 - [ ] Zaszyfrować `cloudflare-secret.yaml` przez SOPS i pushować
 - [ ] Migracja istniejących apek z Portainera do gita

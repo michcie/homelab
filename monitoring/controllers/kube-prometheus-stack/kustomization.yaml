@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: monitoring
+resources:
+  - namespace.yaml
+  - helmrepository.yaml
+  - release.yaml
+configMapGenerator:
+  - name: flux-kube-state-metrics-config
+    files:
+      - kube-state-metrics-config.yaml
+    options:
+      labels:
+        app.kubernetes.io/part-of: flux
+        app.kubernetes.io/component: monitoring
+# Podmienia nazwę configmapy (z hashem) w spec.valuesFrom HelmRelease,
+# żeby zmiana configu KSM wyzwalała helm upgrade.
+configurations:
+  - kustomizeconfig.yaml

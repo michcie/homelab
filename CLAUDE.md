@@ -37,6 +37,12 @@ cloud-init + Ansible. Branch Fluxa: `master`, path: `clusters/homelab`.
   (HelmRepository + HelmRelease + namespace).
 - **Konfiguracja infra** (ClusterIssuery, sekrety configów) →
   `infrastructure/configs/`.
+- **Monitoring** (Prometheus/Grafana/Loki) → `monitoring/controllers/` (HelmReleasy)
+  i `monitoring/configs/` (PodMonitory, dashboardy). Osobna gałąź kaskady:
+  `monitoring-controllers` (`dependsOn: infrastructure-controllers`) →
+  `monitoring-configs`. **Uwaga:** w `monitoring/` HelmRepository żyje w namespace
+  `monitoring` (kustomization ma `namespace: monitoring`), a nie w `flux-system`
+  jak w `infrastructure/` — bo dir korzysta z `configMapGenerator`.
 - **Wejścia Fluxa** (Kustomizations) → `clusters/homelab/*.yaml`.
 - Kaskada zależności: **controllers → configs → apps** (`dependsOn`). Nie łam
   kolejności — apki nie mają startować przed ingressem i TLS.
