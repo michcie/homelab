@@ -27,8 +27,12 @@
   become: false
   environment:
     KUBECONFIG: "{{ lookup('env', 'HOME') }}/.kube/homelab.yaml"
-  command: kubectl get namespace flux-system
-  register: flux_ns
+  # Sprawdzamy realną instalację Fluxa (deployment source-controller), a NIE
+  # samego namespace flux-system. Rola sops tworzy ten namespace z góry (dla
+  # sekretu sops-age), więc gołe "get namespace" zawsze zwracałoby rc=0 i
+  # bootstrap byłby pomijany na każdym świeżym klastrze.
+  command: kubectl -n flux-system get deployment source-controller
+  register: flux_installed
   failed_when: false
   changed_when: false
 
@@ -47,7 +51,7 @@
     --personal
     --private=false
   when:
-    - flux_ns.rc != 0
+    - flux_installed.rc != 0
     - flux_github_owner != ""
     - github_token != ""
 
@@ -56,4 +60,4 @@
     msg: >-
       Flux bootstrap pominięty.
       Ustaw flux_github_owner w group_vars i uruchom z GITHUB_TOKEN=<token>.
-  when: flux_ns.rc != 0 and (flux_github_owner == "" or github_token == "")
+  when: flux_installed.rc != 0 and (flux_github_owner == "" or github_token == "")
